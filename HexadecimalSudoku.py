@@ -1,0 +1,259 @@
+#!/usr/bin/python
+#Hexademical Sudoku SAT Reduction
+#Nick Miler
+#CSC 339: Artifical Intelligenc
+#Assistance given by:
+#Your nqueens code in order to:
+#1. Itearte over all pairs using it.combinations
+#2. Read in files from a directory
+#3. use os in order to run MiniSat
+
+#This will be the SAT reduction and generate all of the rules for hexadecimal sudoku
+
+#Create a variable for minisat
+minisat = "/usr/bin/minisat"
+
+import itertools as it #user to iterate over all pairs to generate rules
+import os #in order to call MiniSat from Python. Makes it where I don't have to go into the shell to call minisat and generate an output
+def generate_hexidemical_rules_standard():
+    #Will generate all the rules if Hexadecimal sudoku
+    #Rules:
+    # 1) Only 1 of each number in the rows
+    # 2) Only 1 of each number in the columns
+    # 3) Only 1 of each number in each square
+    # 4) Only one of each number in each of the squares
+    # Can assert/add a rule where there is a number already on the board
+    # Will return a string of all the rules in order to create a DIMACS file
+    #dimmensions of the board:
+    n = 16
+    numberofClauses = 0
+    output = ""
+    output += "p cnf " + str(n*n*n) + " @" + "\n"
+    #Create all the row cases
+    for num in range(n):
+        for row in range(n):
+            X = [] #An array to iterate all the pairs for each row
+            for column in range(n):
+                X.append((hexidecimaltosatnumber(row,column,num)))
+                output += str(hexidecimaltosatnumber(row,column,num)) + " "
+            output += " 0\n"
+            numberofClauses += 1
+            for (x1, x2) in it.combinations(X,2):
+                output += str(-x1) + " " + str(-x2) +" 0\n"
+                numberofClauses += 1
+    #Create all the column cases
+    for num in range(n):
+        for column in range(n):
+            X = [] #This is now an array to iterate all the pairs for each column
+            #Putting it in this part of the nested loop because it needs to reset
+            #after each column entry
+            for row in range(n):
+                X.append(hexidecimaltosatnumber(row,column,num))
+                output += str(hexidecimaltosatnumber(row,column,num)) + " "
+            output += " 0\n"
+            numberofClauses += 1
+            for (x1,x2) in it.combinations(X,2):
+                output += str(-x1) + " " + str(-x2) + " 0\n"
+                numberofClauses += 1                                   
+    #Create all the square cases
+    for rowGroup in range(4):
+        for columnGroup in range(4):
+            for number in range(n):
+                X = []
+                for row in range(4):
+                    for column in range(4):
+                        num = hexidecimaltosatnumber((rowGroup*4)+row, (columnGroup*4)+column,number)
+                        X.append(num)
+                        output+= str(num) + " "
+                output+= " 0\n"
+                numberofClauses += 1
+                for (x1, x2) in it.combinations(X,2):
+                    output += str(-x1) + " " + str(-x2) + " 0\n"
+                    numberofClauses+=1
+    #Create all the single square cases.
+    for row in range(n):
+        for column in range(n):
+            X = [] #For the single square, this is the necessary position to create the array
+            #For each row and column, you generate the rule that there can be any number
+            #in that 'box'. However, after that is complete, you need to iterate for that
+            #row, column, and number, before moving onto the next iteration of the column
+            #for loop
+            for number in range(n):
+                X.append(hexidecimaltosatnumber(row,column,number))
+                output += str(hexidecimaltosatnumber(row,column,number)) + " "
+            output += " 0\n"
+            numberofClauses += 1
+            
+            for (x1, x2) in it.combinations(X,2):
+                output += str(-x1) + " " + str(-x2) + " 0\n"
+                numberofClauses+=1
+    #Add the number of clauses and the variables to the beginning of the string to format
+    #for the DIMACS format
+    #Then, return the string
+    return output
+def hexidecimaltosatnumber(row,column,number):
+    #returns as an int the sat variable
+    #each variable has a tuple Xr,c,n
+    #will convert r*16+c*16 + n to a variable number
+    return row*(16*16) + column*(16) + number + 1
+def convertcharactertonumber(character):
+
+    x= ['0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f']
+    return x.index(character)
+def SudokuCharacter(index):
+    #will convert any number to its hex character
+    #This will be important when generating the sudoku solutions
+    print index + "here"
+    x= ['0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f']
+    print x[index]
+    return x[index]
+def printsolutionsboard(solutionString, solutionFileName):
+    #Input: Output string generated by MiniSat
+    #Goal: Print the entire board
+    #Will use the getSudokuCharacter() and convertdecimaltohx() functions
+    #in order to take the positive input values and
+    row, column = 16,16 
+    outputPuzzle = [['0' for i in range(row)] for i in range(column)]
+    x= ['0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f']
+    outputPuzzle[0][0] = x[1]
+    contents = solutionString.split(" " )
+    contents.remove("0\n")
+    for i in contents:
+        num = int(i)
+        if (num > 0):
+            #if it's a positive solution, then convert it to hex
+            #Once converted to hex, put that character on the board
+           indexarray = convertdecimaltohex(num)
+           x= ['0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f']
+           outputPuzzle[indexarray[0]][indexarray[1]] = x[indexarray[2]]
+    outputString = ""
+    #Print the board
+    for i in range(16):
+        for j in range(16):
+            if ((j== 3)or (j == 7) or (j == 11)):
+                outputString +=  outputPuzzle[i][j] + "   "
+            else:
+                outputString+=  outputPuzzle[i][j] + " "
+        if ((i == 3) or (i == 7) or (i == 11)):
+            outputString += "\n"
+        outputString+="\n"
+    print outputString
+    f = open(solutionFileName,"w")
+    f.write(outputString)
+    f.close()
+    print outputString
+def convertdecimaltohex(number):
+    #Input: any decimal number
+    #Output: an array of the form [r,c,n] which maps to Xr,c,n
+    
+    out = hex(number-1)
+    returner = []
+    if (len(out) == 5):
+        #This number has the form 0xFFF
+        returner.append(convertcharactertonumber(out[2]))
+        returner.append(convertcharactertonumber(out[3]))
+        returner.append(convertcharactertonumber(out[4]))
+    elif (len(out) == 4):
+        #This number has the form 0xFF, where r = 0
+        returner.append(0)
+        returner.append(convertcharactertonumber(out[2]))
+        returner.append(convertcharactertonumber(out[3]))
+    else:
+        #This number has the form 0xF, where r = 0 and c = 0
+        returner.append(0)
+        returner.append(0)
+        returner.append(convertcharactertonumber(out[2]))
+
+    return returner
+def checkforUniqueSolution(filename, solutionstring):
+    f= open(filename,"r")
+    contents = f.read()
+    f.close()
+    addline = ""
+    stringsplit = solutionstring.split(" ")
+    for i in stringsplit:
+        num = int(i)
+        
+        if (num > 0):
+
+            addline += str(-num) + " "
+    addline += "0\n"
+    contents += addline
+    #contents contains the original rules and the new solution
+    #Run this through the SAT solver, see if it's unsatisfiable
+    f = open("unique.cnf", "w")
+    f.write(contents)
+    f.close()
+    returned_sat_info = os.system(minisat + ' ' + "unique.cnf" + ' ' + "uniquesolution.out")
+    f = open("uniquesolution.out","r")
+    solution = f.read()
+    if (solution[0:5] == "UNSAT"):
+        print "The solution is unique"
+    else:
+        print "The solution is not unique"
+        print "Here is another solution"
+        printsolutionsboard(solution[4:],"uniquesolution.txt")
+def main():
+    #read in al the files, reduce to sat
+    #(MAGIC) run through the SAT solver
+    allrules = generate_hexidemical_rules_standard()
+    #all rules contains every rule
+    filenames=[] #file names to read in each puzzle
+    rulefilenames = [] #file names for all the .cnf files for SAT solver input
+    outfilenames = [] #file names for all the .out files for the SAT solver
+    solutionfilenames =[]
+    Director = "./SudokuPuzzles"
+    for i in range(1,11):
+        name = "prob_"+str(i)+".inp"
+        rulename = "prob_"+str(i)+"_rules.cnf"
+        outname = "Sudoku"+str(i)+".out"
+        solutionname = "Sudoku"+str(i)+"BoardSolution.txt"
+        filenames.append(name)
+        outfilenames.append(outname)
+        rulefilenames.append(rulename)        
+        solutionfilenames.append(solutionname)
+    try:
+        for i in range(len(filenames)):
+            originalsolution = "Original solution: \n"
+            rulesforBoard = allrules
+            numberofClauses = 123904
+            f= open(Director+"/"+filenames[i],"r")
+            for j in range(16):
+                looker = f.readline()
+                originalsolution += looker + "\n"
+                for k in range(16):
+                    if (looker[k] != "_"):
+                        #add that rule
+                        
+                        #print hexidecimaltosatnumber(j,k, convertcharactertonumber(looker[k]))
+                        rulesforBoard +=  str(hexidecimaltosatnumber(j,k, convertcharactertonumber(looker[k]))) + " 0\n"
+                        numberofClauses+= 1
+            f.close()
+            rulesforBoard = rulesforBoard.replace("@", str(numberofClauses))
+            #All rules for a specific puzzle are represented in rulesforBoard
+            #Now, we can solve the sat problem
+            current_rule_cnf_file = rulefilenames[i]
+            g = open(current_rule_cnf_file, "w")
+            g.write(rulesforBoard)
+            g.close()
+            out_file = outfilenames[i]
+            
+            returned_sat_info = os.system(minisat + " "  + current_rule_cnf_file + " "  + out_file)
+            h = open(out_file, "r")
+            solution = h.read()
+            if (solution[0:5] == "UNSAT"):
+                print "There is no solution \n"
+            else:
+                #A solution exists
+                #Print out the solution
+                #can call printsolutionstring() on solution[4:] if that contains all the variables
+                print "Here is a solution"
+                printsolutionsboard(solution[4:],solutionfilenames[i])
+                #Will check for a unique solution and report it
+                checkforUniqueSolution(rulefilenames[i],solution[4:])
+                #then, check for a unique solution
+                #return that
+            
+    except:
+        print "Error"
+main()
